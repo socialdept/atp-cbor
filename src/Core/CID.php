@@ -27,6 +27,41 @@ class CID
     }
 
     /**
+     * Create a CIDv1 for DAG-CBOR encoded data.
+     *
+     * Encodes the data as DAG-CBOR, hashes with SHA-256, and wraps in a CIDv1.
+     *
+     * @param mixed $data Data to encode and hash (will be DAG-CBOR encoded)
+     * @return self CIDv1 with dag-cbor codec and sha2-256 multihash
+     */
+    public static function forDagCbor(mixed $data): self
+    {
+        $encoded = CBOR::encode($data);
+
+        return self::forDagCborBytes($encoded);
+    }
+
+    /**
+     * Create a CIDv1 from raw DAG-CBOR bytes.
+     *
+     * @param string $bytes Already-encoded DAG-CBOR bytes
+     * @return self CIDv1 with dag-cbor codec and sha2-256 multihash
+     */
+    public static function forDagCborBytes(string $bytes): self
+    {
+        $hash = hash('sha256', $bytes, true);
+
+        // Multihash: 0x12 (sha2-256) + 0x20 (32 bytes) + hash
+        $multihash = chr(0x12).chr(0x20).$hash;
+
+        return new self(
+            version: 1,
+            codec: 0x71, // dag-cbor
+            hash: $multihash,
+        );
+    }
+
+    /**
      * Parse CID from binary data.
      *
      * @param string $data Binary CID data
@@ -197,7 +232,7 @@ class CID
     /**
      * Decode base58btc string to binary.
      */
-    private static function decodeBase58(string $str): string
+    public static function decodeBase58(string $str): string
     {
         $decoded = gmp_init(0);
         $base = gmp_init(58);
@@ -229,7 +264,7 @@ class CID
     /**
      * Encode binary to base58btc string.
      */
-    private static function encodeBase58(string $data): string
+    public static function encodeBase58(string $data): string
     {
         $num = gmp_init('0x' . bin2hex($data));
         $base = gmp_init(58);

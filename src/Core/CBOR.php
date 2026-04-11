@@ -5,14 +5,24 @@ declare(strict_types=1);
 namespace SocialDept\AtpCbor\Core;
 
 use SocialDept\AtpCbor\CBOR\Decoder;
+use SocialDept\AtpCbor\CBOR\Encoder;
 
 /**
- * CBOR facade for simple decoding operations.
- *
- * Provides static methods matching the interface needed by FirehoseConsumer.
+ * CBOR facade for encoding and decoding operations.
  */
 class CBOR
 {
+    /**
+     * Encode a value to DAG-CBOR bytes.
+     *
+     * @param mixed $data Value to encode
+     * @return string Binary DAG-CBOR data
+     */
+    public static function encode(mixed $data): string
+    {
+        return Encoder::encode($data);
+    }
+
     /**
      * Decode first CBOR item and return remainder.
      *
