@@ -1,4 +1,4 @@
-<h1 align="center">ATP CBOR</h1>
+[![CBOR Header](./header.png)](https://github.com/socialdept/atp-cbor)
 
 <h3 align="center">
     CBOR, CAR, and CID binary encoding for AT Protocol in PHP.
