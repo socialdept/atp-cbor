@@ -76,6 +76,25 @@ class PlcOperation
     }
 
     /**
+     * Build an unsigned tombstone operation, permanently deactivating the DID.
+     *
+     * A tombstone clears every data field: only `type` and `prev` are present.
+     * It must be signed by a key currently in the DID's rotationKeys, and the
+     * usual recovery window (72h on plc.directory) applies — a rotation op can
+     * still nullify it during that window.
+     *
+     * @param  array<string, mixed>  $lastOp  The last operation from the PLC log
+     * @return array<string, mixed>  Unsigned tombstone ready for signing
+     */
+    public static function tombstone(array $lastOp): array
+    {
+        return [
+            'type' => 'plc_tombstone',
+            'prev' => self::computePrev($lastOp),
+        ];
+    }
+
+    /**
      * Sign an unsigned operation.
      *
      * DAG-CBOR encodes the operation, signs the bytes, and adds the sig field.
