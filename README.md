@@ -121,6 +121,31 @@ $cid->toString();  // Base32 (v1) or base58btc (v0)
 $cid->toBinary();  // Raw binary
 ```
 
+### Checking Record Proofs
+
+`com.atproto.sync.getRecord` returns a record with its proof: the repo's signed commit and the tree nodes on the path to the record, as a CAR. `RecordProof` checks the proof's structure. Every block must hash to its CID, the CAR's root must be the commit, and walking the tree from the commit's data root must reach the record at its key:
+
+```php
+use SocialDept\AtpCbor\Proof\ProofException;
+use SocialDept\AtpCbor\Proof\RecordProof;
+
+try {
+    $proven = RecordProof::verify($car, 'app.bsky.graph.verification', $rkey, did: $issuerDid);
+} catch (ProofException $e) {
+    // A block that does not match its CID, a commit for another repo,
+    // or a key the proof does not reach.
+}
+
+$proven->record;          // The record, decoded
+$proven->cid;             // Its CID
+$proven->commit;          // The commit's CID
+$proven->rev;             // The commit's revision
+$proven->signature;       // The commit's signature, 64 bytes
+$proven->unsignedCommit;  // The bytes that signature covers
+```
+
+It does not check the commit's signature, which needs the repo's signing key from its DID document. Verify `$proven->signature` over `$proven->unsignedCommit` with that key before trusting that the repo published the record.
+
 ### Low-level Binary Reading
 
 For custom binary parsing, use the `Reader` and `Varint` utilities:
@@ -156,6 +181,7 @@ $value = Varint::decode($data, $offset);
 | Class | Description |
 |-------|-------------|
 | `CID` | Immutable Content Identifier (v0 and v1) |
+| `ProvenRecord` | A record whose place in a repo a proof established |
 
 ### Readers
 
@@ -163,6 +189,7 @@ $value = Varint::decode($data, $offset);
 |-------|-------------|
 | `BlockReader` | Generator-based CAR block reader |
 | `RecordExtractor` | AT Protocol MST record walker |
+| `RecordProof` | Checks a `getRecord` proof's structure, down to the record |
 | `Decoder` | RFC 8949 CBOR decoder with DAG-CBOR |
 | `Reader` | Stream-style binary data reader |
 | `Varint` | Variable-length integer decoder |
