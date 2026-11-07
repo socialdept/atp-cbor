@@ -14,222 +14,59 @@
 
 ---
 
-## What is ATP CBOR?
+This package reads and writes the binary formats of the AT Protocol in plain PHP, with no Laravel dependency. It decodes and encodes DAG-CBOR, reads CAR archives and the records in a repository's tree, parses CIDs, checks `getRecord` proofs, and signs PLC operations with secp256k1 keys. To learn all about it, head over to [the documentation](https://socialde.pt/docs/atp-cbor).
 
-**ATP CBOR** is a standalone PHP library for decoding CBOR (Concise Binary Object Representation), CAR (Content Addressable aRchive), and CID (Content Identifier) binary data from the AT Protocol network. It powers the binary decoding layer used by firehose consumers and repository loaders across the Social Dept. AT Protocol packages.
-
-No Laravel dependency required — this is a pure PHP package.
-
-## Quick Example
+Here are a few short examples of what you can do. Decode CBOR from a firehose event:
 
 ```php
 use SocialDept\AtpCbor\Core\CBOR;
-use SocialDept\AtpCbor\Core\CAR;
-use SocialDept\AtpCbor\Core\CID;
 
-// Decode CBOR data from a firehose event
 $decoded = CBOR::decode($binaryData);
-
-// Parse CAR blocks from a repository export
-$blocks = CAR::blockMap($carData);
-
-// Parse a CID string
-$cid = CID::fromString('bafyreie5cvv4h45feadgeuwhbcutmh6t7ceseocckahdoe6uat64zmz454a');
-echo $cid->version; // 1
 ```
 
-## Installation
-
-```bash
-composer require socialdept/atp-cbor
-```
-
-Requires the `gmp` PHP extension for large integer handling.
-
-## Usage
-
-### Decoding CBOR
-
-The `CBOR` facade provides three methods for decoding binary CBOR data:
-
-```php
-use SocialDept\AtpCbor\Core\CBOR;
-
-// Decode a single CBOR item
-$value = CBOR::decode($data);
-
-// Decode the first item and get remaining data
-[$value, $remaining] = CBOR::decodeFirst($data);
-
-// Decode all sequential CBOR items
-$items = CBOR::decodeAll($data);
-```
-
-Supports all CBOR major types including unsigned/negative integers, byte strings, text strings, arrays, maps, tagged values (including DAG-CBOR tag 42 for CID links), and special values (booleans, null, floats).
-
-### Parsing CAR Archives
-
-CAR (Content Addressable aRchive) files contain blocks of CBOR data indexed by CID:
+Read the blocks of a CAR archive into a map of CID to bytes:
 
 ```php
 use SocialDept\AtpCbor\Core\CAR;
-use SocialDept\AtpCbor\CAR\RecordExtractor;
 
-// Get all blocks as a CID => data map
 $blocks = CAR::blockMap($carData);
-
-// Extract records from AT Protocol MST blocks
-$extractor = new RecordExtractor($blocks, 'did:plc:xyz');
-foreach ($extractor->extractRecords($rootCid) as $path => $record) {
-    echo $record['uri'];       // at://did:plc:xyz/app.bsky.feed.post/3k4...
-    echo $record['cid'];       // bafyrei...
-    print_r($record['value']); // Decoded record data
-}
 ```
 
-For memory-efficient processing, use the `BlockReader` generator directly:
-
-```php
-use SocialDept\AtpCbor\CAR\BlockReader;
-
-$reader = new BlockReader($carData);
-foreach ($reader->blocks() as [$cid, $blockData]) {
-    // Process each block individually
-}
-```
-
-### Working with CIDs
-
-Content Identifiers can be parsed from strings or binary data:
+Parse a CID and turn it back into a string:
 
 ```php
 use SocialDept\AtpCbor\Core\CID;
 
-// Parse from string (auto-detects v0 vs v1)
-$cid = CID::fromString('bafyreie5cvv4h45feadgeuwhbcutmh6t7ceseocckahdoe6uat64zmz454a');
-
-// Parse from binary data
-$cid = CID::fromBinary($bytes);
-
-// Access properties
-$cid->version; // 0 or 1
-$cid->codec;   // Codec identifier
-$cid->hash;    // Raw multihash bytes
-
-// Convert back
-$cid->toString();  // Base32 (v1) or base58btc (v0)
-$cid->toBinary();  // Raw binary
+$cid = CID::fromString('bafyreie5cvv4h45feadgeuwhbcutmh6t7ceseocckahdoe6uat64zmz454');
+$cid->version;    // 1
+$cid->toString();
 ```
 
-### Checking Record Proofs
-
-`com.atproto.sync.getRecord` returns a record with its proof: the repo's signed commit and the tree nodes on the path to the record, as a CAR. `RecordProof` checks the proof's structure. Every block must hash to its CID, the CAR's root must be the commit, and walking the tree from the commit's data root must reach the record at its key:
+Check that a record from `com.atproto.sync.getRecord` sits where its repo's commit says:
 
 ```php
-use SocialDept\AtpCbor\Proof\ProofException;
 use SocialDept\AtpCbor\Proof\RecordProof;
 
-try {
-    $proven = RecordProof::verify($car, 'app.bsky.graph.verification', $rkey, did: $issuerDid);
-} catch (ProofException $e) {
-    // A block that does not match its CID, a commit for another repo,
-    // or a key the proof does not reach.
-}
-
-$proven->record;          // The record, decoded
-$proven->cid;             // Its CID
-$proven->commit;          // The commit's CID
-$proven->rev;             // The commit's revision
-$proven->signature;       // The commit's signature, 64 bytes
-$proven->unsignedCommit;  // The bytes that signature covers
+$proven = RecordProof::verify($car, 'app.bsky.graph.verification', $rkey, did: $issuerDid);
+$proven->record;
 ```
 
-It does not check the commit's signature, which needs the repo's signing key from its DID document. Verify `$proven->signature` over `$proven->unsignedCommit` with that key before trusting that the repo published the record.
+## Documentation
 
-### Low-level Binary Reading
+You'll find the documentation on [https://socialde.pt/docs/atp-cbor](https://socialde.pt/docs/atp-cbor).
 
-For custom binary parsing, use the `Reader` and `Varint` utilities:
+Find yourself stuck using the package? Found a bug? Do you have general questions or suggestions for improving it? Feel free to [create an issue on GitHub](https://github.com/socialdept/atp-cbor/issues).
 
-```php
-use SocialDept\AtpCbor\Binary\Reader;
-use SocialDept\AtpCbor\Binary\Varint;
+## Testing
 
-// Stream-style binary reader
-$reader = new Reader($data);
-$byte = $reader->readByte();
-$chunk = $reader->readBytes(32);
-$varint = $reader->readVarint();
-
-// Standalone varint decoding
-$offset = 0;
-$value = Varint::decode($data, $offset);
+```bash
+vendor/bin/phpunit
 ```
 
-## API Reference
+## Contributing
 
-### Core Facades
-
-| Class | Method | Description |
-|-------|--------|-------------|
-| `CBOR` | `decode(string $data)` | Decode complete CBOR data |
-| `CBOR` | `decodeFirst(string $data)` | Decode first item, return remaining |
-| `CBOR` | `decodeAll(string $data)` | Decode all sequential items |
-| `CAR` | `blockMap(string $data, ?string $did)` | Parse CAR into CID => block map |
-
-### Value Objects
-
-| Class | Description |
-|-------|-------------|
-| `CID` | Immutable Content Identifier (v0 and v1) |
-| `ProvenRecord` | A record whose place in a repo a proof established |
-
-### Readers
-
-| Class | Description |
-|-------|-------------|
-| `BlockReader` | Generator-based CAR block reader |
-| `RecordExtractor` | AT Protocol MST record walker |
-| `RecordProof` | Checks a `getRecord` proof's structure, down to the record |
-| `Decoder` | RFC 8949 CBOR decoder with DAG-CBOR |
-| `Reader` | Stream-style binary data reader |
-| `Varint` | Variable-length integer decoder |
-
-## Supported Standards
-
-- **CBOR** - RFC 8949 (Concise Binary Object Representation)
-- **DAG-CBOR** - IPLD extension with tag 42 for CID links
-- **CAR** - Content Addressable aRchive (v1)
-- **CID** - IPLD Content Identifiers (v0 and v1)
-- **Multihash** - SHA-256 and other hash types
-- **Varint** - Protocol Buffers-style variable-length integers
-
-## Requirements
-
-- PHP 8.2+
-- ext-gmp
-
-## Resources
-
-- [AT Protocol Documentation](https://atproto.com/)
-- [CBOR RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)
-- [IPLD CID Specification](https://github.com/multiformats/cid)
-- [CAR Specification](https://ipld.io/specs/transport/car/)
-
-## Support & Contributing
-
-Found a bug or have a feature request? [Open an issue](https://github.com/socialdept/atp-cbor/issues).
-
-Want to contribute? We'd love your help! Check out the [contribution guidelines](CONTRIBUTING.md).
-
-## Credits
-
-- [Miguel Batres](https://batres.co) - founder & lead maintainer
-- [All contributors](https://github.com/socialdept/atp-cbor/graphs/contributors)
+Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
 
 ## License
 
-ATP CBOR is open-source software licensed under the [MIT license](LICENSE).
-
----
-
-**Built for the Atmosphere** • By Social Dept.
+The MIT License (MIT). Please see [LICENSE](LICENSE) for more information.
